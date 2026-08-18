@@ -293,7 +293,29 @@
     flex:0 0 auto;
   }
   footer a{ color:var(--accent); }
-</style>
+    .predbar{
+      display:flex; flex-wrap:wrap; gap:6px;
+      margin-top:6px; flex:0 0 auto;
+    }
+    .predcard{
+      flex:1 1 0; min-width:70px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:2px; padding:6px 4px;
+      border-radius:6px; border:1px solid var(--border);
+      background:var(--panel-2);
+      font-family:'IBM Plex Mono', monospace;
+    }
+    .predcard .predlabel{ font-size:9px; color:var(--muted); letter-spacing:0.4px; text-transform:uppercase; }
+    .predcard .predsignal{ font-size:13px; font-weight:700; letter-spacing:0.5px; margin-top:2px; }
+    .predcard.neutral{ background:var(--panel-2); border-color:var(--border); }
+    .predcard.neutral .predsignal{ color:var(--muted); }
+    .predcard.up{ background:var(--up); border-color:var(--up); }
+    .predcard.up .predlabel, .predcard.up .predsignal{ color:#062b12; }
+    .predcard.down{ background:var(--down); border-color:var(--down); }
+    .predcard.down .predlabel, .predcard.down .predsignal{ color:#2b0509; }
+      .preddebug{ font-size:8px; color:var(--muted); margin-top:2px; letter-spacing:0.3px; }
+      .predcard.up .preddebug, .predcard.down .preddebug{ color:inherit; opacity:0.75; }
+    </style>
 </head>
 <body>
 <div class="app">
@@ -405,10 +427,12 @@
     Data source: Binance <code>&lt;symbol&gt;@trade</code> WebSocket for the live hour, and
     <code>/api/v3/klines</code> (interval=1s) for hours you navigate back to.
   </footer>
-
-</div>
-
-<div id="tooltip" class="hidden"></div>
+  
+    <div id="predBar" class="predbar"></div>
+  
+  </div>
+  
+  <div id="tooltip" class="hidden"></div>
 
 <script>
 (function(){
@@ -907,11 +931,12 @@
             if(cell && cell.classList.contains('future')) setCellClass(cell,'nodata',null);
           }
           state.lastCurSec=curSec;
-          updateProgress(curSec);
-          updateStats();
-          updateNav();
-        }
-      },1000);
+                    updateProgress(curSec);
+                    updateStats();
+                    updateNav();
+                  }
+                  updatePredictions();
+                },1000);
 
   // ---------- viewport auto-fit ----------
         function fitGridsToViewport(){
@@ -943,15 +968,86 @@
     window.addEventListener('resize', scheduleFit);
     window.addEventListener('orientationchange', scheduleFit);
   
-    // ---------- boot ----------
-        buildGrids();
-        updateHourLabel();
-    paintFromCache(state.viewHourStart);
-    loadHistorical(state.viewHourStart, Math.floor((Date.now()-state.viewHourStart)/1000)+1);
-    connectWS();
-    updateNav();
-    fitGridsToViewport();
-    requestAnimationFrame(fitGridsToViewport);
+    // ---------- interval predictions ----------
+        const PRED_INTERVALS=[1,2,3,4,5];
+        const predCards={};
+        function buildPredCards(){
+          const bar=document.getElementById('predBar');
+          if(!bar) return;
+          bar.innerHTML='';
+          PRED_INTERVALS.forEach(n=>{
+            const card=document.createElement('div');
+            card.className='predcard neutral';
+            const label=document.createElement('div');
+            label.className='predlabel';
+            label.textContent=n+' MIN — ';
+            const targetSpan=document.createElement('span');
+            targetSpan.className='predtarget';
+            targetSpan.textContent='—';
+            label.appendChild(targetSpan);
+            const signal=document.createElement('div');
+                    signal.className='predsignal';
+                    signal.textContent='FLAT';
+                    const debugEl=document.createElement('div');
+                    debugEl.className='preddebug';
+                    debugEl.textContent='G:0 R:0 Δ:0';
+                    card.appendChild(label);
+                    card.appendChild(signal);
+                    card.appendChild(debugEl);
+                    bar.appendChild(card);
+                    predCards[n]={root:card, targetEl:targetSpan, signalEl:signal, debugEl:debugEl};
+                  });
+                }
+        function computeIntervalPrediction(n){
+          const hs=state.liveHourStart;
+          const arr=cache.get(hs);
+          const nowMs=Date.now();
+          let secOfHour=Math.floor((nowMs-hs)/1000)+1;
+          secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
+          const winSize=n*60;
+          const k=Math.ceil(secOfHour/winSize);
+          const T=k*winSize;
+          const windowStart=(k-1)*winSize+1;
+          const windowEnd=T-1;
+          let green=0, red=0;
+          if(arr){
+            for(let s=windowStart; s<=windowEnd; s++){
+              const d=arr[s-1];
+              if(!d) continue;
+              if(d.c>d.o) green++;
+              else if(d.c<d.o) red++;
+            }
+          }
+          const delta=green-red;
+                const theta=n*10;
+                let signal='flat';
+                if(delta>=theta) signal='up';
+                else if(delta<=-theta) signal='down';
+                return {T, signal, green, red, delta, theta};
+              }
+        function updatePredictions(){
+          PRED_INTERVALS.forEach(n=>{
+            const card=predCards[n];
+            if(!card) return;
+            const res=computeIntervalPrediction(n);
+                    card.targetEl.textContent=res.T;
+                    card.signalEl.textContent = res.signal==='up' ? 'GREEN' : (res.signal==='down' ? 'RED' : 'FLAT');
+                    card.root.className = 'predcard ' + (res.signal==='up' ? 'up' : (res.signal==='down' ? 'down' : 'neutral'));
+                    card.debugEl.textContent = `G:${res.green} R:${res.red} Δ:${res.delta}/${res.theta}`;
+                  });
+        }
+    
+        // ---------- boot ----------
+            buildGrids();
+            buildPredCards();
+            updateHourLabel();
+        paintFromCache(state.viewHourStart);
+        loadHistorical(state.viewHourStart, Math.floor((Date.now()-state.viewHourStart)/1000)+1);
+        connectWS();
+        updateNav();
+        updatePredictions();
+        fitGridsToViewport();
+        requestAnimationFrame(fitGridsToViewport);
   
   })();
 </script>
