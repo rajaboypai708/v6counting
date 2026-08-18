@@ -1019,11 +1019,10 @@
             }
           }
           const delta=green-red;
-                const theta=n*10;
                 let signal='flat';
-                if(delta>=theta) signal='up';
-                else if(delta<=-theta) signal='down';
-                return {T, signal, green, red, delta, theta};
+                if(delta>0) signal='up';
+                else if(delta<0) signal='down';
+                return {T, signal, green, red, delta};
               }
         function updatePredictions(){
           PRED_INTERVALS.forEach(n=>{
@@ -1033,7 +1032,7 @@
                     card.targetEl.textContent=res.T;
                     card.signalEl.textContent = res.signal==='up' ? 'GREEN' : (res.signal==='down' ? 'RED' : 'FLAT');
                     card.root.className = 'predcard ' + (res.signal==='up' ? 'up' : (res.signal==='down' ? 'down' : 'neutral'));
-                    card.debugEl.textContent = `G:${res.green} R:${res.red} Δ:${res.delta}/${res.theta}`;
+                    card.debugEl.textContent = `G:${res.green} R:${res.red} Δ:${res.delta}`;
                   });
         }
     
