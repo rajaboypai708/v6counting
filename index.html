@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Second Grid — Binance 1s Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c10;
+    --panel:#11141a;
+    --panel-2:#0d1015;
+    --border:#20262f;
+    --text:#c9d2dc;
+    --muted:#5c6570;
+    --accent:#ffb454;
+    --up:#22C55E;
+            --down:#EE334E;
+            --flat:#181616;
+    --future:#151a21;
+    --nodata:#1c1417;
+  }
+  *{box-sizing:border-box;}
+  html{ height:100%; }
+  html,body{margin:0;padding:0;}
+  body{
+        background:
+          radial-gradient(ellipse at top, #10141b 0%, var(--bg) 55%);
+        color:var(--text);
+        font-family:'IBM Plex Mono', ui-monospace, monospace;
+        height:100vh;
+        height:100dvh;
+        padding:4px;
+        overflow:hidden;
+        position:fixed;
+        inset:0;
+        width:100%;
+      }
+    .app{ width:100%; margin:0; height:100%; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+
+  /* ---------- header ---------- */
+  .topbar{
+      display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+      margin-top:4px;
+      flex:0 0 auto;
+    }
+    .wordmark{
+      font-family:'Space Grotesk', sans-serif;
+      font-weight:700;
+      font-size:13px;
+      letter-spacing:0.2px;
+      color:#eef1f5;
+      display:flex; align-items:baseline; gap:6px;
+      flex:0 0 auto;
+    }
+    .wordmark span.tag{
+      font-family:'IBM Plex Mono', monospace;
+      font-weight:500;
+      font-size:9px;
+      color:var(--muted);
+      letter-spacing:1px;
+      text-transform:uppercase;
+      border:1px solid var(--border);
+      padding:1px 5px;
+      border-radius:3px;
+    }
+    .eyebrow{
+      color:var(--muted);
+      font-size:12px;
+      letter-spacing:0.5px;
+      margin-top:4px;
+    }
+  
+    .controls{
+                display:flex; flex-wrap:nowrap; align-items:center; gap:4px;
+                margin-top:4px; padding:3px 6px;
+                background:var(--panel);
+                border:1px solid var(--border);
+                border-radius:6px;
+                flex:0 0 auto;
+                width:100%; max-width:100%; box-sizing:border-box;
+                height:auto;
+                overflow-x:auto; overflow-y:hidden; scrollbar-width:none;
+              }
+              .controls::-webkit-scrollbar{ display:none; }
+              .controls .row1{
+                display:flex; flex-wrap:nowrap; align-items:center; gap:4px;
+                width:auto; overflow:visible; flex:0 0 auto;
+              }
+  .dot{
+      width:6px; height:6px; border-radius:50%;
+      background:var(--muted); flex:0 0 auto;
+    }
+  .dot.live{ background:#26d07c; box-shadow:0 0 0 0 rgba(38,208,124,.6); animation:pulse 1.6s infinite; }
+  .dot.hist{ background:var(--accent); }
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(38,208,124,.55); }
+    70%{ box-shadow:0 0 0 7px rgba(38,208,124,0); }
+    100%{ box-shadow:0 0 0 0 rgba(38,208,124,0); }
+  }
+  @media (prefers-reduced-motion: reduce){ .dot.live{ animation:none; } }
+
+  .status-text{ font-size:10px; color:var(--muted); min-width:70px; white-space:nowrap; flex-shrink:0; }
+
+  .sym-input{
+      background:var(--panel-2); color:var(--text);
+      border:1px solid var(--border); border-radius:5px;
+      padding:3px 6px; font:inherit; font-size:11px; width:82px;
+      text-transform:uppercase; letter-spacing:0.5px; flex-shrink:0;
+    }
+  .sym-input:focus{ outline:1px solid var(--accent); }
+
+  .navgroup{ display:flex; align-items:center; gap:4px; margin-left:8px; flex:0 0 auto; }
+    button.navbtn{
+      background:var(--panel-2); color:var(--text);
+      border:1px solid var(--border); border-radius:5px;
+      padding:3px 7px; font:inherit; font-size:11px; cursor:pointer;
+    }
+  button.navbtn:hover:not(:disabled){ border-color:var(--accent); color:var(--accent); }
+  button.navbtn:disabled{ opacity:.35; cursor:not-allowed; }
+  button.navbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+
+  .hourlabel{
+        font-size:10px; min-width:150px; text-align:center;
+        color:#e7ebef; letter-spacing:0.3px; white-space:nowrap;
+      }
+    .hourlabel-stack{ display:flex; flex-direction:column; align-items:center; gap:1px; }
+    .hourlabel-utc{ font-size:11px; color:var(--muted); min-width:150px; text-align:center; white-space:nowrap; }
+  .livebtn{
+        background:transparent; color:var(--accent);
+        border:1px solid var(--accent); border-radius:5px;
+        padding:3px 8px; font:inherit; font-size:10px; cursor:pointer; white-space:nowrap;
+      }
+    .livebtn:hover{ background:rgba(255,180,84,0.1); }
+      #liveBtn{
+          writing-mode:vertical-rl; text-orientation:mixed; transform:rotate(180deg);
+          padding:3px 1px; font-size:7px; border-radius:4px; letter-spacing:0.5px;
+          height:28px;
+        }
+      .hidden{ display:none !important; }
+      .tzgroup{ display:flex; align-items:center; gap:2px; margin:0 2px; }
+      .tzlabel{
+          font-size:6px; color:var(--muted); letter-spacing:0.5px;
+          writing-mode:vertical-rl; text-orientation:mixed; transform:rotate(180deg);
+          margin-right:1px; display:flex; align-items:center; justify-content:center;
+        }
+
+  .timeset{
+          gap:2px; flex:0 0 auto;
+          width:auto;
+          justify-content:center; margin-left:4px !important;
+          margin-top:0;
+        }
+      .timeunit{ display:flex; flex-direction:column; align-items:center; gap:0; }
+      .timeval{ display:flex; flex-direction:column; align-items:center; }
+      .timeinput{
+        width:24px; text-align:center; background:var(--panel-2); color:var(--text);
+        border:1px solid var(--border); border-radius:3px; padding:0 1px;
+        font:inherit; font-size:8px; -moz-appearance:textfield; line-height:1.3;
+      }
+      .timeinput::-webkit-outer-spin-button, .timeinput::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+      .timelbl{ font-size:5.5px; color:var(--muted); letter-spacing:0.3px; margin-top:0; line-height:1; }
+      button.spinbtn{ padding:0 4px; font-size:6.5px; line-height:1.2; }
+
+  .progresswrap{
+    margin-top:10px; display:flex; align-items:center; gap:10px;
+    font-size:11px; color:var(--muted);
+  }
+  .progressbar{
+    flex:1; height:4px; background:var(--panel-2);
+    border-radius:2px; overflow:hidden; border:1px solid var(--border);
+  }
+  .progressbar > i{ display:block; height:100%; background:var(--accent); width:0%; }
+
+  .banner{
+    margin-top:6px; padding:8px 12px; font-size:11px;
+    background:#241416; border:1px solid #4a2530; color:#f0a8b3;
+    border-radius:6px; line-height:1.4;
+    flex:0 0 auto;
+  }
+
+  /* ---------- legend ---------- */
+  .legend{
+    display:flex; flex-wrap:wrap; gap:14px;
+    margin:16px 2px 6px; font-size:11px; color:var(--muted);
+  }
+  .legend .item{ display:flex; align-items:center; gap:6px; }
+  .swatch{ width:11px; height:11px; border-radius:2px; border:1px solid var(--border); }
+  
+    .statsbar{
+            display:flex; flex-wrap:wrap; align-items:center; gap:14px;
+            margin:0; padding:6px 10px;
+            background:var(--panel-2); border:1px solid var(--border);
+            border-radius:6px; font-size:11px; letter-spacing:0.3px;
+            flex:0 0 auto;
+          }
+          .statsbar .stat{ display:flex; align-items:center; gap:4px; color:var(--muted); }
+          .statsbar .stat b{ font-size:12px; font-weight:600; }
+          .statsbar .stat.up b{ color:#26d07c; }
+                    .statsbar .stat.down b{ color:#f0455e; }
+                    .statsbar .stat.nodata b{ color:#7a8290; }
+
+  /* ---------- panels ---------- */
+    .panel{
+          margin-top:4px; background:var(--panel);
+          border:1px solid var(--border); border-radius:6px;
+          padding:0; overflow:hidden;
+          flex:1 1 0; min-height:0;
+          display:flex; flex-direction:column;
+        }
+        .panel-head{
+          display:flex; align-items:baseline; gap:8px;
+          font-size:9px; color:var(--muted); letter-spacing:0.6px;
+          margin:0; padding:2px 6px; text-transform:uppercase;
+          flex:0 0 auto;
+        }
+        .panel-head b{ color:#e7ebef; font-size:9px; letter-spacing:0.6px; }
+      
+        .grid-wrap{
+                overflow:hidden;
+                padding:0; margin:0;
+                flex:1 1 0; min-height:0;
+                display:flex;
+              }
+          .grid-wrap::-webkit-scrollbar{ width:0; height:0; }
+  .grid-wrap::-webkit-scrollbar{ width:8px; height:8px; }
+  .grid-wrap::-webkit-scrollbar-thumb{ background:#262c35; border-radius:4px; }
+  .grid-wrap::-webkit-scrollbar-track{ background:transparent; }
+
+  .grid{
+            display:grid;
+            grid-template-columns:repeat(var(--grid-cols, 40), minmax(0,1fr));
+            grid-template-rows:repeat(var(--grid-rows, 45), 1fr);
+            gap:0;
+            line-height:0;
+            width:100%;
+            height:100%;
+          }
+      .cell{
+                              display:flex; align-items:center; justify-content:center;
+                              font-size:var(--cell-font, 8px); color:#FFFFFF;
+                              font-weight:800;
+                              font-variant-numeric:tabular-nums;
+                              letter-spacing:-0.4px;
+                              border-radius:0; cursor:pointer;
+                              background:var(--future);
+                              border:none;
+                              outline:1px solid rgba(255,255,255,0.03);
+                              outline-offset:-1px;
+                              user-select:none;
+                              overflow:hidden;
+                              padding:0 1px;
+                              white-space:nowrap;
+                            }
+            .cell .num-text{ display:inline-block; transform:scaleY(1.4); }
+              .cell.future{ background:var(--future); color:rgba(255,255,255,0.35); }
+              .cell.nodata{ background:var(--nodata); color:rgba(255,255,255,0.3);
+                background-image:repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 3px, transparent 3px 6px); }
+  .cell.up{ background:var(--up); color:#FFFFFF; font-weight:800; }
+      .cell.down{ background:var(--down); color:#FFFFFF; font-weight:800; }
+      .cell.flat{ background:#181616; color:#FFFFFF; font-weight:800; }
+  .cell.live{ box-shadow:0 0 0 2px var(--accent), 0 0 8px 1px rgba(255,180,84,0.7); animation:cursorblink 1s infinite; }
+  @keyframes cursorblink{
+    0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.35); }
+  }
+  @media (prefers-reduced-motion: reduce){ .cell.live{ animation:none; } }
+  .cell:hover{ outline:1px solid #fff; outline-offset:-1px; }
+
+  /* ---------- tooltip & detail ---------- */
+  #tooltip{
+    position:fixed; z-index:50; pointer-events:none;
+    background:#05070a; border:1px solid var(--border);
+    color:#e7ebef; font-size:11px; padding:6px 8px; border-radius:5px;
+    box-shadow:0 4px 14px rgba(0,0,0,0.5);
+    white-space:nowrap;
+  }
+
+  .detail{
+      margin-top:2px; padding:2px 10px; background:var(--panel);
+      border:1px solid var(--border); border-radius:6px;
+      font-size:10px; display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+      flex:0 0 auto; line-height:1.1;
+    }
+    .detail .field{ display:flex; flex-direction:row; align-items:baseline; gap:4px; }
+    .detail .field .k{ color:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:0.5px; }
+    .detail .field .v{ color:#e7ebef; font-size:11px; margin-top:0; }
+    .detail .field .v.up{ color:#26d07c; }
+      .detail .field .v.down{ color:#f0455e; }
+
+  footer{
+    margin-top:6px; font-size:10px; color:var(--muted); line-height:1.4;
+    flex:0 0 auto;
+  }
+  footer a{ color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+      <div class="wordmark hidden">SECOND GRID <span class="tag">binance · 1s</span></div>
+      <div class="eyebrow hidden">3,600 one-second candles, boxed and numbered — one hour visible at a time</div>
+    
+      <div id="statsBar" class="statsbar">
+            <span id="liveDot" class="dot"></span>
+            <span id="statusText" class="status-text hidden">connecting…</span>
+            <span class="stat up">GREEN <b id="statUp">0</b></span>
+            <span class="stat down">RED <b id="statDown">0</b></span>
+            <span class="stat nodata">DRAW <b id="statDraw">0</b></span>
+          </div>
+        </div>
+                
+                  <div class="progresswrap hidden">
+        <span id="progressText">—</span>
+        <div class="progressbar"><i id="progressFill"></i></div>
+      </div>
+  
+    <div id="banner" class="banner hidden"></div>
+  
+    <div class="legend hidden">
+      <div class="item"><span class="swatch" style="background:var(--up)"></span> up second</div>
+      <div class="item"><span class="swatch" style="background:var(--down)"></span> down second</div>
+      <div class="item"><span class="swatch" style="background:var(--flat)"></span> flat</div>
+      <div class="item"><span class="swatch" style="background:var(--future)"></span> not reached yet</div>
+      <div class="item"><span class="swatch" style="background:var(--nodata)"></span> no data</div>
+      <div class="item"><span class="swatch" style="background:var(--accent)"></span> current second</div>
+    </div>
+  
+    <section class="panel">
+      <div class="panel-head"><b>SECONDS</b></div>
+      <div class="grid-wrap"><div id="grid" class="grid"></div></div>
+    </section>
+  
+    <div id="detail" class="detail hidden"></div>
+  
+    <div class="controls">
+            <div class="row1">
+          <input id="symInput" class="sym-input" list="symbols" value="BTCUSDT" spellcheck="false" />
+          <datalist id="symbols">
+            <option value="BTCUSDT"></option>
+            <option value="ETHUSDT"></option>
+            <option value="BNBUSDT"></option>
+            <option value="SOLUSDT"></option>
+            <option value="XRPUSDT"></option>
+            <option value="DOGEUSDT"></option>
+            <option value="ADAUSDT"></option>
+          </datalist>
+      
+          <div class="navgroup">
+                          <button id="prevBtn" class="navbtn" title="Previous hour">◀</button>
+                          <div class="hourlabel-stack">
+                            <div id="hourLabel" class="hourlabel">—</div>
+                            <div id="hourLabelUTC" class="hourlabel-utc">—</div>
+                          </div>
+                          <button id="nextBtn" class="navbtn" title="Next hour">▶</button>
+                          <button id="liveBtn" class="livebtn hidden">Live</button>
+                        </div>
+            </div>
+      
+              <div class="navgroup timeset">
+                          <div class="tzgroup">
+                            <span class="tzlabel">IST</span>
+                          <div class="timeunit">
+                            <button id="hrUp" class="navbtn spinbtn" title="Increase hour">▲</button>
+                            <div class="timeval"><input id="hrInput" class="timeinput" type="number" min="0" max="23" value="0" /><span class="timelbl">HR</span></div>
+                            <button id="hrDown" class="navbtn spinbtn" title="Decrease hour">▼</button>
+                          </div>
+                          <div class="timeunit">
+                            <button id="minUp" class="navbtn spinbtn" title="Increase minute">▲</button>
+                            <div class="timeval"><input id="minInput" class="timeinput" type="number" min="0" max="59" value="0" /><span class="timelbl">MIN</span></div>
+                            <button id="minDown" class="navbtn spinbtn" title="Decrease minute">▼</button>
+                          </div>
+                          <div class="timeunit">
+                            <button id="secUp" class="navbtn spinbtn" title="Increase second">▲</button>
+                            <div class="timeval"><input id="secInput" class="timeinput" type="number" min="0" max="59" value="0" /><span class="timelbl">SEC</span></div>
+                            <button id="secDown" class="navbtn spinbtn" title="Decrease second">▼</button>
+                          </div>
+                          </div>
+                          <div class="tzgroup">
+                            <span class="tzlabel">UTC</span>
+                          <div class="timeunit">
+                            <button id="hrUpUTC" class="navbtn spinbtn" title="Increase hour">▲</button>
+                            <div class="timeval"><input id="hrInputUTC" class="timeinput" type="number" min="0" max="23" value="0" /><span class="timelbl">HR</span></div>
+                            <button id="hrDownUTC" class="navbtn spinbtn" title="Decrease hour">▼</button>
+                          </div>
+                          <div class="timeunit">
+                            <button id="minUpUTC" class="navbtn spinbtn" title="Increase minute">▲</button>
+                            <div class="timeval"><input id="minInputUTC" class="timeinput" type="number" min="0" max="59" value="0" /><span class="timelbl">MIN</span></div>
+                            <button id="minDownUTC" class="navbtn spinbtn" title="Decrease minute">▼</button>
+                          </div>
+                          <div class="timeunit">
+                            <button id="secUpUTC" class="navbtn spinbtn" title="Increase second">▲</button>
+                            <div class="timeval"><input id="secInputUTC" class="timeinput" type="number" min="0" max="59" value="0" /><span class="timelbl">SEC</span></div>
+                            <button id="secDownUTC" class="navbtn spinbtn" title="Decrease second">▼</button>
+                          </div>
+                          </div>
+                          <button id="applyTimeBtn" class="livebtn hidden" title="Jump grid start to this time">Set start</button>
+                                  </div>
+                                </div>
+
+  <footer class="hidden">
+    Hover a box for a quick read, click one to pin the details panel above. Each box is one second of the
+    selected hour; only a full hour (3,600 seconds) is ever shown, never more or less.
+    Data source: Binance <code>&lt;symbol&gt;@trade</code> WebSocket for the live hour, and
+    <code>/api/v3/klines</code> (interval=1s) for hours you navigate back to.
+  </footer>
+
+</div>
+
+<div id="tooltip" class="hidden"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const SEC_PER_HOUR = 3600;
+
+  const state = {
+        symbol: 'BTCUSDT',
+        liveHourStart: hourStart(Date.now()),
+        viewHourStart: 0,
+        isLive: true,
+        ws: null,
+        reconnectAttempts: 0,
+        lastCurSec: -1,
+        viewBackfilled: false,
+        autoRoll: true,
+        tickSecStart: null,
+        tickOpen: null,
+        tickClose: null
+      };
+  state.viewHourStart = state.liveHourStart;
+
+  const cache = new Map();       // hourStartMs -> Array(3600) of {o,c} | null
+  const loadingHours = new Set();
+  const cells = new Array(SEC_PER_HOUR);
+
+  // ---------- helpers ----------
+  function pad(n,l){ return String(n).padStart(l,'0'); }
+  function hourStart(ms){ const d=new Date(ms); d.setMinutes(0,0,0); return d.getTime(); }
+  function ensureHourCache(hs){
+      if(!cache.has(hs)) cache.set(hs, new Array(SEC_PER_HOUR).fill(null));
+      return cache.get(hs);
+    }
+    function getSecond(t){
+      const hs=hourStart(t);
+      const arr=cache.get(hs);
+      if(!arr) return null;
+      const idx=Math.floor((t-hs)/1000);
+      return (idx>=0 && idx<SEC_PER_HOUR) ? arr[idx] : null;
+    }
+    function setSecond(t,data){
+      const hs=hourStart(t);
+      const arr=ensureHourCache(hs);
+      const idx=Math.floor((t-hs)/1000);
+      if(idx>=0 && idx<SEC_PER_HOUR) arr[idx]=data;
+    }
+    function isViewLive(viewStart){
+      const nowMs=Date.now();
+      return viewStart<=nowMs && (viewStart+SEC_PER_HOUR*1000)>nowMs;
+    }
+    function colorClass(o,c){ if(c>o) return 'up'; if(c<o) return 'down'; return 'flat'; }
+  function fmtTime(ms){
+    const d=new Date(ms);
+    return pad(d.getHours(),2)+':'+pad(d.getMinutes(),2)+':'+pad(d.getSeconds(),2);
+  }
+  function fmtHourLabel(hs){
+        const d1=new Date(hs), d2=new Date(hs+3600000);
+        const day=d1.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+        return day+' · '+pad(d1.getHours(),2)+':'+pad(d1.getMinutes(),2)+':'+pad(d1.getSeconds(),2)+'–'+pad(d2.getHours(),2)+':'+pad(d2.getMinutes(),2)+':'+pad(d2.getSeconds(),2);
+      }
+      function fmtHourLabelUTC(hs){
+        const d1=new Date(hs), d2=new Date(hs+3600000);
+        const day=d1.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+        return 'UTC '+day+' · '+pad(d1.getUTCHours(),2)+':'+pad(d1.getUTCMinutes(),2)+':'+pad(d1.getUTCSeconds(),2)+'–'+pad(d2.getUTCHours(),2)+':'+pad(d2.getUTCMinutes(),2)+':'+pad(d2.getUTCSeconds(),2);
+      }
+
+  // ---------- build grid ----------
+  function makeCell(num, idx){
+      const d=document.createElement('div');
+      d.className='cell future';
+      const s=document.createElement('span');
+      s.className='num-text';
+      s.textContent=num;
+      d.appendChild(s);
+      d.dataset.num=num;
+      d.dataset.idx=idx;
+      return d;
+    }
+  function buildGrids(){
+    const grid=document.getElementById('grid');
+    grid.innerHTML='';
+    const frag=document.createDocumentFragment();
+    for(let num=1;num<=SEC_PER_HOUR;num++){
+      const idx=num-1;
+      const cell=makeCell(num, idx);
+      frag.appendChild(cell);
+      cells[idx]=cell;
+    }
+    grid.appendChild(frag);
+  }
+
+  function setCellClass(cell, cls, data){
+    let full = 'cell '+cls;
+    if(cell.classList.contains('live') && cls!=='__clearlive__') full += ' live';
+    cell.className = full;
+    if(data){ cell.dataset.o=data.o; cell.dataset.c=data.c; }
+    else { delete cell.dataset.o; delete cell.dataset.c; }
+  }
+  function markLiveCell(idx){
+    cells.forEach(c=>{ if(c) c.classList.remove('live'); });
+    if(cells[idx]) cells[idx].classList.add('live');
+  }
+
+  // ---------- painting ----------
+  function paintFromCache(viewStart){
+      const nowMs=Date.now();
+      for(let i=0;i<SEC_PER_HOUR;i++){
+        const t=viewStart+i*1000;
+        const cell=cells[i];
+        const d=getSecond(t);
+        cell.classList.remove('live');
+        if(d){ setCellClass(cell, colorClass(d.o,d.c), d); }
+        else if(t>nowMs){ setCellClass(cell,'future',null); }
+        else { setCellClass(cell,'nodata',null); }
+      }
+      const liveIdx=Math.floor((nowMs-viewStart)/1000);
+      const showLiveMarker = liveIdx>=0 && liveIdx<SEC_PER_HOUR && getSecond(viewStart+liveIdx*1000);
+      if(showLiveMarker) markLiveCell(liveIdx);
+      state.lastCurSec = (liveIdx>=0 && liveIdx<SEC_PER_HOUR) ? liveIdx : -1;
+      updateProgress((liveIdx>=0 && liveIdx<SEC_PER_HOUR) ? liveIdx : null);
+      updateStats();
+    }
+
+  function updateProgress(curSec){
+      const txt=document.getElementById('progressText');
+      const fill=document.getElementById('progressFill');
+      if(curSec===null){
+        txt.textContent='historical hour · full 3,600s shown';
+        fill.style.width='100%';
+        return;
+      }
+      const pct=(( curSec+1)/SEC_PER_HOUR*100).toFixed(1);
+      txt.textContent=`second ${curSec+1} / 3600 · ${pct}% through the hour`;
+      fill.style.width=pct+'%';
+    }
+  
+    function updateStats(){
+        let up=0, down=0, draw=0;
+        for(let i=0;i<SEC_PER_HOUR;i++){
+          const cell=cells[i];
+          if(!cell) continue;
+          if(cell.classList.contains('future')) continue;
+          if(cell.classList.contains('up')) up++;
+          else if(cell.classList.contains('down')) down++;
+          else draw++;
+        }
+        document.getElementById('statUp').textContent=up;
+        document.getElementById('statDown').textContent=down;
+        document.getElementById('statDraw').textContent=draw;
+      }
+
+  // ---------- REST historical fetch ----------
+  async function loadHistorical(rangeStart, uptoSecExclusive){
+      if(loadingHours.has(rangeStart)) return;
+      loadingHours.add(rangeStart);
+      const rangeEnd = rangeStart+SEC_PER_HOUR*1000-1;
+      const targetEnd = uptoSecExclusive>=SEC_PER_HOUR ? rangeEnd : rangeStart+uptoSecExclusive*1000-1;
+      let cursor = rangeStart;
+      try{
+        while(cursor <= targetEnd){
+          const chunkEnd = Math.min(cursor+999*1000, targetEnd);
+          const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(state.symbol)}&interval=1s&startTime=${cursor}&endTime=${chunkEnd}&limit=1000`;
+          const res = await fetch(url);
+          if(!res.ok) throw new Error('http '+res.status);
+          const rows = await res.json();
+          if(!Array.isArray(rows) || rows.length===0) break;
+          for(const r of rows){
+            setSecond(r[0], {o:parseFloat(r[1]), c:parseFloat(r[4])});
+          }
+          const last=rows[rows.length-1];
+          cursor=last[0]+1000;
+          if(rows.length<1000) break;
+        }
+        hideBanner();
+      }catch(err){
+        showBanner('Historical data blocked or unreachable in this preview (network/CORS restriction). Download this file and open it directly in your browser to fetch live Binance data.');
+      } finally {
+        loadingHours.delete(rangeStart);
+        if(state.viewHourStart===rangeStart) paintFromCache(rangeStart);
+      }
+    }
+
+  // ---------- WebSocket (live hour only) ----------
+  function connectWS(){
+    if(state.ws){ try{ state.ws.onclose=null; state.ws.close(); }catch(e){} }
+    setStatus('connecting');
+    let opened=false;
+    const url = `wss://stream.binance.com:9443/ws/${state.symbol.toLowerCase()}@trade`;
+    let ws;
+    try{ ws=new WebSocket(url); } catch(e){ showBanner('Could not open a WebSocket connection to Binance from this environment. Download this file and open it directly in your browser.'); setStatus('offline'); return; }
+    state.ws=ws;
+    const failTimer=setTimeout(()=>{
+      if(!opened){ showBanner('Live connection to Binance is blocked or slow in this preview. Download this file and open it directly in your browser for live data.'); }
+    },6000);
+
+    ws.onopen=()=>{ opened=true; clearTimeout(failTimer); state.reconnectAttempts=0; setStatus('live'); hideBanner(); };
+    ws.onmessage=(ev)=>{
+          try{
+            const msg=JSON.parse(ev.data);
+            if(msg.e!=='trade') return;
+            const T=msg.T;
+            const price=parseFloat(msg.p);
+            const secStart=Math.floor(T/1000)*1000;
+            if(state.tickSecStart!==secStart){
+              state.tickSecStart=secStart;
+              state.tickOpen=price;
+              state.tickClose=price;
+            } else {
+              state.tickClose=price;
+            }
+            handleCandle(state.tickSecStart, state.tickOpen, state.tickClose);
+          }catch(e){ /* ignore malformed frame */ }
+        };
+    ws.onerror=()=>{ setStatus('error'); };
+    ws.onclose=()=>{
+      setStatus('offline');
+      state.reconnectAttempts++;
+      const delay=Math.min(15000, 1000*state.reconnectAttempts);
+      setTimeout(()=>{ if(state.ws===ws) connectWS(); }, delay);
+    };
+  }
+
+  function handleCandle(t,o,c){
+      setSecond(t, {o,c});
+      if(t>=state.viewHourStart && t<state.viewHourStart+SEC_PER_HOUR*1000){
+        const idx=Math.floor((t-state.viewHourStart)/1000);
+        const cell=cells[idx];
+        setCellClass(cell, colorClass(o,c), {o,c});
+        markLiveCell(idx);
+        updateProgress(idx);
+        state.lastCurSec=idx;
+        updateStats();
+      }
+    }
+  
+    function rollLiveHour(newHs){
+          state.liveHourStart=newHs;
+          if(state.isLive){
+            state.viewHourStart=newHs;
+            updateHourLabel();
+            paintFromCache(newHs);
+            loadHistorical(newHs, Math.floor((Date.now()-newHs)/1000)+1);
+            state.viewBackfilled=false;
+            state.autoRoll=true;
+            updateNav();
+          }
+        }
+
+  // ---------- status / banner ----------
+  function setStatus(kind){
+    const dot=document.getElementById('liveDot');
+    const txt=document.getElementById('statusText');
+    dot.classList.remove('live','hist');
+    if(kind==='live'){ dot.classList.add(state.isLive?'live':'hist'); txt.textContent=state.isLive?'live · streaming':'connected (viewing history)'; }
+    else if(kind==='connecting'){ txt.textContent='connecting…'; }
+    else if(kind==='error'){ txt.textContent='connection error'; }
+    else { txt.textContent='offline · retrying…'; }
+  }
+  function showBanner(msg){ const b=document.getElementById('banner'); b.textContent=msg; b.classList.remove('hidden'); fitGridsToViewport(); }
+    function hideBanner(){ document.getElementById('banner').classList.add('hidden'); fitGridsToViewport(); }
+
+  // ---------- nav ----------
+  function updateHourLabel(){
+      document.getElementById('hourLabel').textContent=fmtHourLabel(state.viewHourStart);
+      document.getElementById('hourLabelUTC').textContent=fmtHourLabelUTC(state.viewHourStart);
+      syncTimeInputsFromView();
+    }
+  function updateNav(){
+    document.getElementById('nextBtn').disabled = state.viewHourStart+3600000 > state.liveHourStart;
+    document.getElementById('liveBtn').classList.toggle('hidden', state.isLive);
+    setStatus(state.ws && state.ws.readyState===1 ? 'live' : 'offline');
+  }
+
+  function setView(hs){
+        state.viewHourStart=hs;
+        state.isLive = hs===state.liveHourStart;
+        updateHourLabel();
+        paintFromCache(hs);
+        const nowMs=Date.now();
+        const windowEnded = nowMs>=hs+SEC_PER_HOUR*1000;
+        const upto = windowEnded ? SEC_PER_HOUR : (isViewLive(hs) ? Math.floor((nowMs-hs)/1000)+1 : 0);
+        state.viewBackfilled = windowEnded;
+        state.autoRoll = !windowEnded;
+        if(upto>0) loadHistorical(hs, upto);
+        updateNav();
+      }
+  function prevHour(){ setView(state.viewHourStart-3600000); }
+  function nextHour(){ const t=state.viewHourStart+3600000; if(t<=state.liveHourStart) setView(t); }
+  function jumpToLive(){ setView(state.liveHourStart); }
+
+  // ---------- manual HH:MM:SS start-time picker ----------
+  function clampInt(v,min,max){
+    v=parseInt(v,10);
+    if(isNaN(v)) v=min;
+    if(v<min) v=min;
+    if(v>max) v=max;
+    return v;
+  }
+  function syncTimeInputsFromView(){
+        const d=new Date(state.viewHourStart);
+        document.getElementById('hrInput').value=pad(d.getHours(),2);
+        document.getElementById('minInput').value=pad(d.getMinutes(),2);
+        document.getElementById('secInput').value=pad(d.getSeconds(),2);
+        document.getElementById('hrInputUTC').value=pad(d.getUTCHours(),2);
+        document.getElementById('minInputUTC').value=pad(d.getUTCMinutes(),2);
+        document.getElementById('secInputUTC').value=pad(d.getUTCSeconds(),2);
+      }
+  function stepTime(unit, delta){
+        const base=new Date(state.viewHourStart);
+        if(unit==='hr') base.setHours(base.getHours()+delta);
+        else if(unit==='min') base.setMinutes(base.getMinutes()+delta);
+        else base.setSeconds(base.getSeconds()+delta);
+        setView(base.getTime());
+      }
+  function applyManualTime(){
+          const hrEl=document.getElementById('hrInput');
+          const minEl=document.getElementById('minInput');
+          const secEl=document.getElementById('secInput');
+          const hr=clampInt(hrEl.value,0,23);
+          const min=clampInt(minEl.value,0,59);
+          const sec=clampInt(secEl.value,0,59);
+          hrEl.value=pad(hr,2); minEl.value=pad(min,2); secEl.value=pad(sec,2);
+          const base=new Date(state.viewHourStart);
+          base.setHours(hr,min,sec,0);
+          setView(base.getTime());
+        }
+    function stepTimeUTC(unit, delta){
+          const base=new Date(state.viewHourStart);
+          if(unit==='hr') base.setUTCHours(base.getUTCHours()+delta);
+          else if(unit==='min') base.setUTCMinutes(base.getUTCMinutes()+delta);
+          else base.setUTCSeconds(base.getUTCSeconds()+delta);
+          setView(base.getTime());
+        }
+    function applyManualTimeUTC(){
+          const hrEl=document.getElementById('hrInputUTC');
+          const minEl=document.getElementById('minInputUTC');
+          const secEl=document.getElementById('secInputUTC');
+          const hr=clampInt(hrEl.value,0,23);
+          const min=clampInt(minEl.value,0,59);
+          const sec=clampInt(secEl.value,0,59);
+          hrEl.value=pad(hr,2); minEl.value=pad(min,2); secEl.value=pad(sec,2);
+          const base=new Date(state.viewHourStart);
+          base.setUTCHours(hr,min,sec,0);
+          setView(base.getTime());
+        }
+
+  function setSymbol(raw){
+      const sym=(raw||'').trim().toUpperCase();
+      if(!sym || sym===state.symbol) return;
+      state.symbol=sym;
+      cache.clear();
+      loadingHours.clear();
+      state.liveHourStart=hourStart(Date.now());
+      state.isLive=true;
+      state.tickSecStart=null;
+      state.tickOpen=null;
+      state.tickClose=null;
+      connectWS();
+      setView(state.liveHourStart);
+    }
+
+  // ---------- tooltip & detail ----------
+  const tooltip=document.getElementById('tooltip');
+  function showTooltip(cell, e){
+    const idx=+cell.dataset.idx, num=+cell.dataset.num;
+    const t=state.viewHourStart+idx*1000;
+    let line=`#${num} · ${fmtTime(t)}`;
+    if(cell.dataset.o!==undefined){
+      const o=parseFloat(cell.dataset.o), c=parseFloat(cell.dataset.c);
+      const pct=((c-o)/o*100).toFixed(3);
+      line += ` · O ${o} → C ${c} (${pct>0?'+':''}${pct}%)`;
+    } else {
+      line += ' · no data';
+    }
+    tooltip.textContent=line;
+    tooltip.classList.remove('hidden');
+    positionTooltip(e);
+  }
+  function positionTooltip(e){
+      const pad=12;
+      let x=e.clientX+14, y=e.clientY+14;
+      const rect=tooltip.getBoundingClientRect();
+      const w=rect.width||160, h=rect.height||24;
+      if(x+w+pad>window.innerWidth) x=e.clientX-w-14;
+      if(y+h+pad>window.innerHeight) y=e.clientY-h-14;
+      if(x<pad) x=pad;
+      if(y<pad) y=pad;
+      tooltip.style.left=x+'px';
+      tooltip.style.top=y+'px';
+    }
+  function hideTooltip(){ tooltip.classList.add('hidden'); }
+
+  function showDetail(cell){
+    const idx=+cell.dataset.idx, num=+cell.dataset.num;
+    const t=state.viewHourStart+idx*1000;
+    const detail=document.getElementById('detail');
+    let bodyHtml='';
+    if(cell.dataset.o!==undefined){
+      const o=parseFloat(cell.dataset.o), c=parseFloat(cell.dataset.c);
+      const pct=((c-o)/o*100);
+      const dirClass = c>o?'up':(c<o?'down':'');
+      bodyHtml = `
+        <div class="field"><div class="k">Box</div><div class="v">#${num}</div></div>
+        <div class="field"><div class="k">Time</div><div class="v">${fmtTime(t)}</div></div>
+        <div class="field"><div class="k">Open</div><div class="v">${o}</div></div>
+        <div class="field"><div class="k">Close</div><div class="v">${c}</div></div>
+        <div class="field"><div class="k">Change</div><div class="v ${dirClass}">${pct>0?'+':''}${pct.toFixed(3)}%</div></div>
+      `;
+    } else {
+      bodyHtml = `
+        <div class="field"><div class="k">Box</div><div class="v">#${num}</div></div>
+        <div class="field"><div class="k">Time</div><div class="v">${fmtTime(t)}</div></div>
+        <div class="field"><div class="k">Data</div><div class="v">no data</div></div>
+      `;
+    }
+    detail.innerHTML=bodyHtml;
+        detail.classList.remove('hidden');
+        fitGridsToViewport();
+      }
+
+  document.addEventListener('mouseover', e=>{ const c=e.target.closest('.cell'); if(c) showTooltip(c,e); });
+  document.addEventListener('mousemove', e=>{ if(!tooltip.classList.contains('hidden')) positionTooltip(e); });
+  document.addEventListener('mouseout', e=>{ if(e.target.closest('.cell')) hideTooltip(); });
+  document.addEventListener('click', e=>{ const c=e.target.closest('.cell'); if(c) showDetail(c); });
+
+  // ---------- controls wiring ----------
+  document.getElementById('prevBtn').addEventListener('click', prevHour);
+  document.getElementById('nextBtn').addEventListener('click', nextHour);
+  document.getElementById('liveBtn').addEventListener('click', jumpToLive);
+  const symInput=document.getElementById('symInput');
+  symInput.addEventListener('change', ()=>setSymbol(symInput.value));
+  symInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ setSymbol(symInput.value); symInput.blur(); } });
+
+  document.getElementById('hrUp').addEventListener('click', ()=>stepTime('hr',1));
+    document.getElementById('hrDown').addEventListener('click', ()=>stepTime('hr',-1));
+    document.getElementById('minUp').addEventListener('click', ()=>stepTime('min',1));
+    document.getElementById('minDown').addEventListener('click', ()=>stepTime('min',-1));
+    document.getElementById('secUp').addEventListener('click', ()=>stepTime('sec',1));
+    document.getElementById('secDown').addEventListener('click', ()=>stepTime('sec',-1));
+    document.getElementById('applyTimeBtn').addEventListener('click', applyManualTime);
+    ['hrInput','minInput','secInput'].forEach(id=>{
+          document.getElementById(id).addEventListener('change', e=>{
+            const el=e.target;
+            const max = id==='hrInput'?23:59;
+            el.value=pad(clampInt(el.value,0,max),2);
+            applyManualTime();
+          });
+          document.getElementById(id).addEventListener('keydown', e=>{ if(e.key==='Enter') applyManualTime(); });
+        });
+        document.getElementById('hrUpUTC').addEventListener('click', ()=>stepTimeUTC('hr',1));
+        document.getElementById('hrDownUTC').addEventListener('click', ()=>stepTimeUTC('hr',-1));
+        document.getElementById('minUpUTC').addEventListener('click', ()=>stepTimeUTC('min',1));
+        document.getElementById('minDownUTC').addEventListener('click', ()=>stepTimeUTC('min',-1));
+        document.getElementById('secUpUTC').addEventListener('click', ()=>stepTimeUTC('sec',1));
+        document.getElementById('secDownUTC').addEventListener('click', ()=>stepTimeUTC('sec',-1));
+        ['hrInputUTC','minInputUTC','secInputUTC'].forEach(id=>{
+          document.getElementById(id).addEventListener('change', e=>{
+            const el=e.target;
+            const max = id==='hrInputUTC'?23:59;
+            el.value=pad(clampInt(el.value,0,max),2);
+            applyManualTimeUTC();
+          });
+          document.getElementById(id).addEventListener('keydown', e=>{ if(e.key==='Enter') applyManualTimeUTC(); });
+        });
+
+  // ---------- ticking clock ----------
+    setInterval(()=>{
+          const nowMs=Date.now();
+          const nowCanonical=hourStart(nowMs);
+        if(nowCanonical!==state.liveHourStart) rollLiveHour(nowCanonical);
+        let windowEnded = nowMs>=state.viewHourStart+SEC_PER_HOUR*1000;
+        if(windowEnded && state.autoRoll){
+          if(!state.viewBackfilled){
+            state.viewBackfilled=true;
+            loadHistorical(state.viewHourStart, SEC_PER_HOUR);
+          }
+          while(nowMs>=state.viewHourStart+SEC_PER_HOUR*1000){
+            state.viewHourStart += SEC_PER_HOUR*1000;
+          }
+          state.isLive = state.viewHourStart===state.liveHourStart;
+          state.viewBackfilled=false;
+          updateHourLabel();
+          paintFromCache(state.viewHourStart);
+          loadHistorical(state.viewHourStart, Math.floor((nowMs-state.viewHourStart)/1000)+1);
+          updateNav();
+          windowEnded=false;
+        } else if(windowEnded && !state.viewBackfilled){
+          state.viewBackfilled=true;
+          loadHistorical(state.viewHourStart, SEC_PER_HOUR);
+        }
+        if(isViewLive(state.viewHourStart)){
+          const curSec=Math.min(SEC_PER_HOUR-1, Math.floor((nowMs-state.viewHourStart)/1000));
+          for(let i=Math.max(0,state.lastCurSec); i<=curSec; i++){
+            const cell=cells[i];
+            if(cell && cell.classList.contains('future')) setCellClass(cell,'nodata',null);
+          }
+          state.lastCurSec=curSec;
+          updateProgress(curSec);
+          updateStats();
+          updateNav();
+        }
+      },1000);
+
+  // ---------- viewport auto-fit ----------
+        function fitGridsToViewport(){
+                          const grid=document.getElementById('grid');
+                          if(!grid) return;
+        
+                          const wrapW = grid.parentElement.clientWidth || window.innerWidth;
+                          const wrapH = grid.parentElement.clientHeight || 200;
+        
+                          let bestCols=60, bestRows=60, bestCell=1;
+                          for(let cols=6; cols<=400; cols++){
+                            const rows=Math.ceil(SEC_PER_HOUR/cols);
+                            const cellW=wrapW/cols, cellH=wrapH/rows;
+                            const cellSize=Math.min(cellW, cellH);
+                            if(cellSize>bestCell){ bestCell=cellSize; bestCols=cols; bestRows=rows; }
+                          }
+                          document.documentElement.style.setProperty('--grid-cols', bestCols);
+                                            document.documentElement.style.setProperty('--grid-rows', bestRows);
+                                            const maxDigits = String(SEC_PER_HOUR).length;
+                                                                                        const fontFit = bestCell / (maxDigits*0.58 + 0.3);
+                                                                                        document.documentElement.style.setProperty('--cell-font', Math.max(5, Math.min(bestCell*0.46, fontFit)).toFixed(1)+'px');
+                                          }
+  
+    let fitTimer=null;
+    function scheduleFit(){
+      clearTimeout(fitTimer);
+      fitTimer=setTimeout(fitGridsToViewport, 120);
+    }
+    window.addEventListener('resize', scheduleFit);
+    window.addEventListener('orientationchange', scheduleFit);
+  
+    // ---------- boot ----------
+        buildGrids();
+        updateHourLabel();
+    paintFromCache(state.viewHourStart);
+    loadHistorical(state.viewHourStart, Math.floor((Date.now()-state.viewHourStart)/1000)+1);
+    connectWS();
+    updateNav();
+    fitGridsToViewport();
+    requestAnimationFrame(fitGridsToViewport);
+  
+  })();
+</script>
+</body>
+</html>
