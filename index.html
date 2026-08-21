@@ -314,7 +314,9 @@
     .predcard.down{ background:var(--down); border-color:var(--down); }
     .predcard.down .predlabel, .predcard.down .predsignal{ color:#2b0509; }
       .preddebug{ font-size:8px; color:#000000; margin-top:2px; letter-spacing:0.3px; }
-            .predcard.up .preddebug, .predcard.down .preddebug{ color:#000000; opacity:0.75; }
+                  .predcard.up .preddebug, .predcard.down .preddebug{ color:#000000; opacity:0.75; }
+                  .predaccuracy{ font-size:9px; color:var(--muted); margin-top:3px; letter-spacing:0.3px; font-weight:600; }
+                  .predcard.up .predaccuracy, .predcard.down .predaccuracy{ color:#000000; opacity:0.85; }
     </style>
 </head>
 <body>
@@ -670,17 +672,18 @@
     }
   
     function rollLiveHour(newHs){
-          state.liveHourStart=newHs;
-          if(state.isLive){
-            state.viewHourStart=newHs;
-            updateHourLabel();
-            paintFromCache(newHs);
-            loadHistorical(newHs, Math.floor((Date.now()-newHs)/1000)+1);
-            state.viewBackfilled=false;
-            state.autoRoll=true;
-            updateNav();
-          }
-        }
+              state.liveHourStart=newHs;
+              resetPredStats();
+              if(state.isLive){
+                state.viewHourStart=newHs;
+                updateHourLabel();
+                paintFromCache(newHs);
+                loadHistorical(newHs, Math.floor((Date.now()-newHs)/1000)+1);
+                state.viewBackfilled=false;
+                state.autoRoll=true;
+                updateNav();
+              }
+            }
 
   // ---------- status / banner ----------
   function setStatus(kind){
@@ -781,19 +784,20 @@
         }
 
   function setSymbol(raw){
-      const sym=(raw||'').trim().toUpperCase();
-      if(!sym || sym===state.symbol) return;
-      state.symbol=sym;
-      cache.clear();
-      loadingHours.clear();
-      state.liveHourStart=hourStart(Date.now());
-      state.isLive=true;
-      state.tickSecStart=null;
-      state.tickOpen=null;
-      state.tickClose=null;
-      connectWS();
-      setView(state.liveHourStart);
-    }
+        const sym=(raw||'').trim().toUpperCase();
+        if(!sym || sym===state.symbol) return;
+        state.symbol=sym;
+        cache.clear();
+        loadingHours.clear();
+        state.liveHourStart=hourStart(Date.now());
+        state.isLive=true;
+        state.tickSecStart=null;
+        state.tickOpen=null;
+        state.tickClose=null;
+        resetPredStats();
+        connectWS();
+        setView(state.liveHourStart);
+      }
 
   // ---------- tooltip & detail ----------
   const tooltip=document.getElementById('tooltip');
@@ -936,7 +940,8 @@
                     updateNav();
                   }
                   updatePredictions();
-                },1000);
+                                    updatePredictionAccuracy();
+                                  },1000);
 
   // ---------- viewport auto-fit ----------
         function fitGridsToViewport(){
@@ -969,35 +974,94 @@
     window.addEventListener('orientationchange', scheduleFit);
   
     // ---------- interval predictions ----------
-        const PRED_INTERVALS=[1,2,3,4,5];
-        const predCards={};
-        function buildPredCards(){
-          const bar=document.getElementById('predBar');
-          if(!bar) return;
-          bar.innerHTML='';
-          PRED_INTERVALS.forEach(n=>{
-            const card=document.createElement('div');
-            card.className='predcard neutral';
-            const label=document.createElement('div');
-            label.className='predlabel';
-            label.textContent=n+' MIN — ';
-            const targetSpan=document.createElement('span');
-            targetSpan.className='predtarget';
-            targetSpan.textContent='—';
-            label.appendChild(targetSpan);
-            const signal=document.createElement('div');
-                    signal.className='predsignal';
-                    signal.textContent='FLAT';
-                    const debugEl=document.createElement('div');
-                    debugEl.className='preddebug';
-                    debugEl.textContent='G:0 R:0 Δ:0';
-                    card.appendChild(label);
-                    card.appendChild(signal);
-                    card.appendChild(debugEl);
-                    bar.appendChild(card);
-                    predCards[n]={root:card, targetEl:targetSpan, signalEl:signal, debugEl:debugEl};
-                  });
-                }
+            const PRED_INTERVALS=[1,2,3,4,5];
+            const predCards={};
+            const predStats={};
+            function buildPredCards(){
+              const bar=document.getElementById('predBar');
+              if(!bar) return;
+              bar.innerHTML='';
+              PRED_INTERVALS.forEach(n=>{
+                const card=document.createElement('div');
+                card.className='predcard neutral';
+                const label=document.createElement('div');
+                label.className='predlabel';
+                label.textContent=n+' MIN — ';
+                const targetSpan=document.createElement('span');
+                targetSpan.className='predtarget';
+                targetSpan.textContent='—';
+                label.appendChild(targetSpan);
+                const signal=document.createElement('div');
+                        signal.className='predsignal';
+                        signal.textContent='FLAT';
+                        const debugEl=document.createElement('div');
+                        debugEl.className='preddebug';
+                        debugEl.textContent='G:0 R:0 Δ:0';
+                        const accEl=document.createElement('div');
+                        accEl.className='predaccuracy';
+                        accEl.textContent='✓0 ✗0';
+                        card.appendChild(label);
+                        card.appendChild(signal);
+                        card.appendChild(debugEl);
+                        card.appendChild(accEl);
+                        bar.appendChild(card);
+                        predCards[n]={root:card, targetEl:targetSpan, signalEl:signal, debugEl:debugEl, accEl:accEl};
+                      });
+                      resetPredStats();
+                    }
+            function resetPredStats(){
+              PRED_INTERVALS.forEach(n=>{
+                predStats[n]={right:0, wrong:0, lastEvalK:null};
+                updateAccuracyDisplay(n);
+              });
+            }
+            function updateAccuracyDisplay(n){
+              const card=predCards[n];
+              const stats=predStats[n];
+              if(!card || !card.accEl || !stats) return;
+              card.accEl.textContent = `✓${stats.right} ✗${stats.wrong}`;
+            }
+            function evaluateWindow(n, k){
+              const hs=state.liveHourStart;
+              const arr=cache.get(hs);
+              if(!arr) return;
+              const winSize=n*60;
+              const windowStart=(k-1)*winSize+1;
+              const windowEnd=k*winSize;
+              let green=0, red=0, firstOpen=null, lastClose=null;
+              for(let s=windowStart; s<=windowEnd; s++){
+                const d=arr[s-1];
+                if(!d) continue;
+                if(firstOpen===null) firstOpen=d.o;
+                lastClose=d.c;
+                if(d.c>d.o) green++;
+                else if(d.c<d.o) red++;
+              }
+              if(firstOpen===null || lastClose===null) return;
+              const delta=green-red;
+              const predictedSignal = delta>0?'up':(delta<0?'down':'flat');
+              const actualSignal = lastClose>firstOpen?'up':(lastClose<firstOpen?'down':'flat');
+              const stats=predStats[n];
+              if(!stats || predictedSignal==='flat') return;
+              if(predictedSignal===actualSignal) stats.right++;
+              else stats.wrong++;
+              updateAccuracyDisplay(n);
+            }
+            function updatePredictionAccuracy(){
+              const hs=state.liveHourStart;
+              const nowMs=Date.now();
+              let secOfHour=Math.floor((nowMs-hs)/1000)+1;
+              secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
+              PRED_INTERVALS.forEach(n=>{
+                const winSize=n*60;
+                const k=Math.ceil(secOfHour/winSize);
+                const stats=predStats[n];
+                if(!stats) return;
+                if(stats.lastEvalK===null){ stats.lastEvalK=k; return; }
+                for(let j=stats.lastEvalK; j<k; j++){ evaluateWindow(n, j); }
+                stats.lastEvalK=k;
+              });
+            }
         function computeIntervalPrediction(n){
           const hs=state.liveHourStart;
           const arr=cache.get(hs);
