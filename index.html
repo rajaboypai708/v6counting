@@ -1078,40 +1078,41 @@
               });
             }
         function computeIntervalPrediction(n){
-          const hs=state.liveHourStart;
-          const arr=cache.get(hs);
-          const nowMs=Date.now();
-          let secOfHour=Math.floor((nowMs-hs)/1000)+1;
-          secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
-          const winSize=n*60;
-          const k=Math.ceil(secOfHour/winSize);
-          const T=k*winSize;
-          const windowStart=(k-1)*winSize+1;
-                    const windowEnd=T;
-                    let green=0, red=0;
-                    if(arr){
-            for(let s=windowStart; s<=windowEnd; s++){
-              const d=arr[s-1];
-              if(!d) continue;
-              if(d.c>d.o) green++;
-              else if(d.c<d.o) red++;
-            }
-          }
-          const delta=green-red;
-                let signal='flat';
-                if(delta>0) signal='up';
-                else if(delta<0) signal='down';
-                return {T, signal, green, red, delta};
-              }
+                  const hs=state.liveHourStart;
+                  const arr=cache.get(hs);
+                  const nowMs=Date.now();
+                  let secOfHour=Math.floor((nowMs-hs)/1000)+1;
+                  secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
+                  const winSize=n*60;
+                  const k=Math.ceil(secOfHour/winSize);
+                  const T=k*winSize;
+                  const windowStart=(k-1)*winSize+1;
+                            const windowEnd=T;
+                            let green=0, red=0, flatCount=0;
+                            if(arr){
+                    for(let s=windowStart; s<=windowEnd; s++){
+                      const d=arr[s-1];
+                      if(!d) continue;
+                      if(d.c>d.o) green++;
+                      else if(d.c<d.o) red++;
+                      else flatCount++;
+                    }
+                  }
+                  const delta=green-red;
+                        let signal='flat';
+                        if(delta>0) signal='up';
+                        else if(delta<0) signal='down';
+                        return {T, signal, green, red, flatCount, delta};
+                      }
         function updatePredictions(){
           PRED_INTERVALS.forEach(n=>{
             const card=predCards[n];
             if(!card) return;
             const res=computeIntervalPrediction(n);
                     card.targetEl.textContent=res.T;
-                    card.signalEl.textContent = res.signal==='up' ? 'GREEN' : (res.signal==='down' ? 'RED' : 'FLAT');
-                    card.root.className = 'predcard ' + (res.signal==='up' ? 'up' : (res.signal==='down' ? 'down' : 'neutral'));
-                    card.debugEl.textContent = `G:${res.green} R:${res.red} Δ:${res.delta}`;
+                                        card.signalEl.textContent = res.signal==='up' ? 'GREEN' : (res.signal==='down' ? 'RED' : 'FLAT');
+                                        card.root.className = 'predcard ' + (res.signal==='up' ? 'up' : (res.signal==='down' ? 'down' : 'neutral'));
+                                        card.debugEl.textContent = `G:${res.green} R:${res.red} F:${res.flatCount} Δ:${res.delta}`;
                   });
         }
     
