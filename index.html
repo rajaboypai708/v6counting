@@ -298,25 +298,25 @@
       margin-top:6px; flex:0 0 auto;
     }
     .predcard{
-      flex:1 1 0; min-width:70px;
-      display:flex; flex-direction:column; align-items:center; justify-content:center;
-      gap:2px; padding:6px 4px;
-      border-radius:6px; border:1px solid var(--border);
-      background:var(--panel-2);
-      font-family:'IBM Plex Mono', monospace;
-    }
-    .predcard .predlabel{ font-size:9px; color:var(--muted); letter-spacing:0.4px; text-transform:uppercase; }
-    .predcard .predsignal{ font-size:13px; font-weight:700; letter-spacing:0.5px; margin-top:2px; }
+          flex:1 1 0; min-width:40px; max-width:90px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          gap:1px; padding:2px 2px;
+          border-radius:6px; border:1px solid var(--border);
+          background:var(--panel-2);
+          font-family:'IBM Plex Mono', monospace;
+        }
+    .predcard .predlabel{ font-size:7px; color:var(--muted); letter-spacing:0.4px; text-transform:uppercase; }
+        .predcard .predsignal{ font-size:10px; font-weight:700; letter-spacing:0.5px; margin-top:1px; }
     .predcard.neutral{ background:var(--panel-2); border-color:var(--border); }
     .predcard.neutral .predsignal{ color:var(--muted); }
     .predcard.up{ background:var(--up); border-color:var(--up); }
     .predcard.up .predlabel, .predcard.up .predsignal{ color:#062b12; }
     .predcard.down{ background:var(--down); border-color:var(--down); }
     .predcard.down .predlabel, .predcard.down .predsignal{ color:#2b0509; }
-      .preddebug{ font-size:13px; color:#000000; margin-top:2px; letter-spacing:0.3px; }
-                  .predcard.up .preddebug, .predcard.down .preddebug{ color:#000000; opacity:0.75; }
-                  .predaccuracy{ font-size:9px; color:var(--muted); margin-top:3px; letter-spacing:0.3px; font-weight:600; }
-                  .predcard.up .predaccuracy, .predcard.down .predaccuracy{ color:#000000; opacity:0.85; }
+      .preddebug{ font-size:7px; color:#000000; margin-top:1px; letter-spacing:0.1px; white-space:nowrap; }
+                        .predcard.up .preddebug, .predcard.down .preddebug{ color:#000000; opacity:0.75; }
+                        .predaccuracy{ font-size:7px; color:var(--muted); margin-top:1px; letter-spacing:0.3px; font-weight:600; }
+                        .predcard.up .predaccuracy, .predcard.down .predaccuracy{ color:#000000; opacity:0.85; }
     </style>
 </head>
 <body>
