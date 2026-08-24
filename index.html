@@ -672,9 +672,9 @@
     }
   
     function rollLiveHour(newHs){
-              state.liveHourStart=newHs;
-              resetPredStats();
-              if(state.isLive){
+                  finalizeHourPredStats(state.liveHourStart);
+                  state.liveHourStart=newHs;
+                  if(state.isLive){
                 state.viewHourStart=newHs;
                 updateHourLabel();
                 paintFromCache(newHs);
@@ -1010,19 +1010,34 @@
                       resetPredStats();
                     }
             function resetPredStats(){
-              PRED_INTERVALS.forEach(n=>{
-                predStats[n]={right:0, wrong:0, lastEvalK:null};
-                updateAccuracyDisplay(n);
-              });
-            }
+                          PRED_INTERVALS.forEach(n=>{
+                            predStats[n]={right:0, wrong:0, lastEvalK:null};
+                            updateAccuracyDisplay(n);
+                          });
+                        }
+                        function finalizeHourPredStats(oldHs){
+                          const arr=cache.get(oldHs);
+                          PRED_INTERVALS.forEach(n=>{
+                            const stats=predStats[n];
+                            if(!stats) return;
+                            if(arr && stats.lastEvalK!==null){
+                              const winSize=n*60;
+                              const maxK=Math.ceil(SEC_PER_HOUR/winSize);
+                              for(let j=stats.lastEvalK; j<=maxK; j++){
+                                evaluateWindow(n, j, oldHs);
+                              }
+                            }
+                            stats.lastEvalK=null;
+                          });
+                        }
             function updateAccuracyDisplay(n){
               const card=predCards[n];
               const stats=predStats[n];
               if(!card || !card.accEl || !stats) return;
               card.accEl.textContent = `✓${stats.right} ✗${stats.wrong}`;
             }
-            function evaluateWindow(n, k){
-              const hs=state.liveHourStart;
+            function evaluateWindow(n, k, hsOverride){
+                          const hs=hsOverride || state.liveHourStart;
               const arr=cache.get(hs);
               if(!arr) return;
               const winSize=n*60;
