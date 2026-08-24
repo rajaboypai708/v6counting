@@ -1016,20 +1016,20 @@
                           });
                         }
                         function finalizeHourPredStats(oldHs){
-                          const arr=cache.get(oldHs);
-                          PRED_INTERVALS.forEach(n=>{
-                            const stats=predStats[n];
-                            if(!stats) return;
-                            if(arr && stats.lastEvalK!==null){
-                              const winSize=n*60;
-                              const maxK=Math.ceil(SEC_PER_HOUR/winSize);
-                              for(let j=stats.lastEvalK; j<=maxK; j++){
-                                evaluateWindow(n, j, oldHs);
-                              }
-                            }
-                            stats.lastEvalK=null;
-                          });
-                        }
+                                                  const arr=cache.get(oldHs);
+                                                  PRED_INTERVALS.forEach(n=>{
+                                                    const stats=predStats[n];
+                                                    if(!stats) return;
+                                                    if(arr && stats.lastEvalK!==null){
+                                                      const winSize=n*60;
+                                                      const maxK=Math.ceil(SEC_PER_HOUR/winSize);
+                                                      for(let j=stats.lastEvalK; j<maxK; j++){
+                                                        evaluateWindow(n, j, oldHs);
+                                                      }
+                                                    }
+                                                    stats.lastEvalK=null;
+                                                  });
+                                                }
             function updateAccuracyDisplay(n){
               const card=predCards[n];
               const stats=predStats[n];
