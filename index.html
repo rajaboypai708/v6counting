@@ -1072,9 +1072,9 @@
           const k=Math.ceil(secOfHour/winSize);
           const T=k*winSize;
           const windowStart=(k-1)*winSize+1;
-          const windowEnd=T-1;
-          let green=0, red=0;
-          if(arr){
+                    const windowEnd=T;
+                    let green=0, red=0;
+                    if(arr){
             for(let s=windowStart; s<=windowEnd; s++){
               const d=arr[s-1];
               if(!d) continue;
