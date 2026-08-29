@@ -1114,17 +1114,29 @@
                           }
                           return {T, signal:closedStats.signal, green:closedStats.green, red:closedStats.red, flatCount:closedStats.flatCount, delta:closedStats.delta};
                         }
+                function computeLiveWindowProgress(n){
+                          const hs=state.liveHourStart;
+                          const arr=cache.get(hs);
+                          const nowMs=Date.now();
+                          let secOfHour=Math.floor((nowMs-hs)/1000)+1;
+                          secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
+                          const winSize=n*60;
+                          const k=Math.ceil(secOfHour/winSize);
+                          const live=computeWindowStats(arr, k, winSize);
+                          return {green:live.green, red:live.red, flatCount:live.flatCount, delta:live.delta};
+                        }
         function updatePredictions(){
-          PRED_INTERVALS.forEach(n=>{
-            const card=predCards[n];
-            if(!card) return;
-            const res=computeIntervalPrediction(n);
-                    card.targetEl.textContent=res.T;
-                                        card.signalEl.textContent = res.signal==='up' ? 'GREEN' : (res.signal==='down' ? 'RED' : 'FLAT');
-                                        card.root.className = 'predcard ' + (res.signal==='up' ? 'up' : (res.signal==='down' ? 'down' : 'neutral'));
-                                        card.debugEl.textContent = `G:${res.green} R:${res.red} F:${res.flatCount} Δ:${res.delta}`;
-                  });
-        }
+                  PRED_INTERVALS.forEach(n=>{
+                    const card=predCards[n];
+                    if(!card) return;
+                    const res=computeIntervalPrediction(n);
+                    const live=computeLiveWindowProgress(n);
+                            card.targetEl.textContent=res.T;
+                                                card.signalEl.textContent = res.signal==='up' ? 'GREEN' : (res.signal==='down' ? 'RED' : 'FLAT');
+                                                card.root.className = 'predcard ' + (res.signal==='up' ? 'up' : (res.signal==='down' ? 'down' : 'neutral'));
+                                                card.debugEl.textContent = `G:${live.green} R:${live.red} F:${live.flatCount} Δ:${live.delta}`;
+                          });
+                }
     
         // ---------- boot ----------
             buildGrids();
