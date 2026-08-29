@@ -1036,32 +1036,55 @@
               if(!card || !card.accEl || !stats) return;
               card.accEl.textContent = `✓${stats.right} ✗${stats.wrong}`;
             }
-            function evaluateWindow(n, k, hsOverride){
+            function computeWindowStats(arr, k, winSize){
+                          const windowStart=(k-1)*winSize+1;
+                          const windowEnd=k*winSize;
+                          let green=0, red=0, flatCount=0, firstOpen=null, lastClose=null;
+                          if(arr){
+                            for(let s=windowStart; s<=windowEnd; s++){
+                              const d=arr[s-1];
+                              if(!d) continue;
+                              if(firstOpen===null) firstOpen=d.o;
+                              lastClose=d.c;
+                              if(d.c>d.o) green++;
+                              else if(d.c<d.o) red++;
+                              else flatCount++;
+                            }
+                          }
+                          const delta=green-red;
+                          let signal='flat';
+                          if(delta>0) signal='up';
+                          else if(delta<0) signal='down';
+                          return {green, red, flatCount, delta, signal, firstOpen, lastClose, complete: firstOpen!==null && lastClose!==null};
+                        }
+                        function getClosedWindowStats(n, hs, kCurrent){
+                          const winSize=n*60;
+                          let hsUse=hs, kUse=kCurrent-1;
+                          if(kUse<1){
+                            hsUse=hs-SEC_PER_HOUR*1000;
+                            kUse=Math.floor(SEC_PER_HOUR/winSize);
+                          }
+                          const arr=cache.get(hsUse);
+                          if(!arr) return null;
+                          return computeWindowStats(arr, kUse, winSize);
+                        }
+                        function evaluateWindow(n, k, hsOverride){
                           const hs=hsOverride || state.liveHourStart;
-              const arr=cache.get(hs);
-              if(!arr) return;
-              const winSize=n*60;
-              const windowStart=(k-1)*winSize+1;
-              const windowEnd=k*winSize;
-              let green=0, red=0, firstOpen=null, lastClose=null;
-              for(let s=windowStart; s<=windowEnd; s++){
-                const d=arr[s-1];
-                if(!d) continue;
-                if(firstOpen===null) firstOpen=d.o;
-                lastClose=d.c;
-                if(d.c>d.o) green++;
-                else if(d.c<d.o) red++;
-              }
-              if(firstOpen===null || lastClose===null) return;
-              const delta=green-red;
-              const predictedSignal = delta>0?'up':(delta<0?'down':'flat');
-              const actualSignal = lastClose>firstOpen?'up':(lastClose<firstOpen?'down':'flat');
-              const stats=predStats[n];
-              if(!stats || predictedSignal==='flat') return;
-              if(predictedSignal===actualSignal) stats.right++;
-              else stats.wrong++;
-              updateAccuracyDisplay(n);
-            }
+                          const winSize=n*60;
+                          const arr=cache.get(hs);
+                          if(!arr) return;
+                          const actualStats=computeWindowStats(arr, k, winSize);
+                          if(!actualStats.complete) return;
+                          const actualSignal = actualStats.lastClose>actualStats.firstOpen ? 'up' : (actualStats.lastClose<actualStats.firstOpen ? 'down' : 'flat');
+                          const predSourceStats=getClosedWindowStats(n, hs, k);
+                          if(!predSourceStats || !predSourceStats.complete) return;
+                          const predictedSignal=predSourceStats.signal;
+                          const stats=predStats[n];
+                          if(!stats || predictedSignal==='flat') return;
+                          if(predictedSignal===actualSignal) stats.right++;
+                          else stats.wrong++;
+                          updateAccuracyDisplay(n);
+                        }
             function updatePredictionAccuracy(){
               const hs=state.liveHourStart;
               const nowMs=Date.now();
@@ -1078,32 +1101,19 @@
               });
             }
         function computeIntervalPrediction(n){
-                  const hs=state.liveHourStart;
-                  const arr=cache.get(hs);
-                  const nowMs=Date.now();
-                  let secOfHour=Math.floor((nowMs-hs)/1000)+1;
-                  secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
-                  const winSize=n*60;
-                  const k=Math.ceil(secOfHour/winSize);
-                  const T=k*winSize;
-                  const windowStart=(k-1)*winSize+1;
-                            const windowEnd=T;
-                            let green=0, red=0, flatCount=0;
-                            if(arr){
-                    for(let s=windowStart; s<=windowEnd; s++){
-                      const d=arr[s-1];
-                      if(!d) continue;
-                      if(d.c>d.o) green++;
-                      else if(d.c<d.o) red++;
-                      else flatCount++;
-                    }
-                  }
-                  const delta=green-red;
-                        let signal='flat';
-                        if(delta>0) signal='up';
-                        else if(delta<0) signal='down';
-                        return {T, signal, green, red, flatCount, delta};
-                      }
+                          const hs=state.liveHourStart;
+                          const nowMs=Date.now();
+                          let secOfHour=Math.floor((nowMs-hs)/1000)+1;
+                          secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
+                          const winSize=n*60;
+                          const k=Math.ceil(secOfHour/winSize);
+                          const T=k*winSize;
+                          const closedStats=getClosedWindowStats(n, hs, k);
+                          if(!closedStats || !closedStats.complete){
+                            return {T, signal:'flat', green:0, red:0, flatCount:0, delta:0};
+                          }
+                          return {T, signal:closedStats.signal, green:closedStats.green, red:closedStats.red, flatCount:closedStats.flatCount, delta:closedStats.delta};
+                        }
         function updatePredictions(){
           PRED_INTERVALS.forEach(n=>{
             const card=predCards[n];
