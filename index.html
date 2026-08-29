@@ -443,19 +443,20 @@
   const SEC_PER_HOUR = 3600;
 
   const state = {
-        symbol: 'BTCUSDT',
-        liveHourStart: hourStart(Date.now()),
-        viewHourStart: 0,
-        isLive: true,
-        ws: null,
-        reconnectAttempts: 0,
-        lastCurSec: -1,
-        viewBackfilled: false,
-        autoRoll: true,
-        tickSecStart: null,
-        tickOpen: null,
-        tickClose: null
-      };
+          symbol: 'BTCUSDT',
+          liveHourStart: hourStart(Date.now()),
+          viewHourStart: 0,
+          isLive: true,
+          ws: null,
+          reconnectAttempts: 0,
+          lastCurSec: -1,
+          viewBackfilled: false,
+          autoRoll: true,
+          tickSecStart: null,
+          tickOpen: null,
+          tickClose: null,
+          lastDisconnectAt: null
+        };
   state.viewHourStart = state.liveHourStart;
 
   const cache = new Map();       // hourStartMs -> Array(3600) of {o,c} | null
@@ -614,11 +615,42 @@
         showBanner('Historical data blocked or unreachable in this preview (network/CORS restriction). Download this file and open it directly in your browser to fetch live Binance data.');
       } finally {
         loadingHours.delete(rangeStart);
-        if(state.viewHourStart===rangeStart) paintFromCache(rangeStart);
-      }
-    }
-
-  // ---------- WebSocket (live hour only) ----------
+                if(state.viewHourStart===rangeStart) paintFromCache(rangeStart);
+              }
+            }
+        
+          async function backfillGap(fromMs, toMs){
+            if(toMs<=fromMs) return;
+            const rangeKey = 'gap:'+fromMs+':'+toMs;
+            if(loadingHours.has(rangeKey)) return;
+            loadingHours.add(rangeKey);
+            let cursor = fromMs;
+            const targetEnd = toMs;
+            try{
+              while(cursor <= targetEnd){
+                const chunkEnd = Math.min(cursor+999*1000, targetEnd);
+                const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(state.symbol)}&interval=1s&startTime=${cursor}&endTime=${chunkEnd}&limit=1000`;
+                const res = await fetch(url);
+                if(!res.ok) throw new Error('http '+res.status);
+                const rows = await res.json();
+                if(!Array.isArray(rows) || rows.length===0) break;
+                for(const r of rows){
+                  setSecond(r[0], {o:parseFloat(r[1]), c:parseFloat(r[4])});
+                }
+                const last=rows[rows.length-1];
+                cursor=last[0]+1000;
+                if(rows.length<1000) break;
+              }
+              hideBanner();
+            }catch(err){
+              showBanner('Gap backfill after reconnect failed (network/CORS restriction). Some seconds during the outage may show as no data.');
+            } finally {
+              loadingHours.delete(rangeKey);
+              paintFromCache(state.viewHourStart);
+            }
+          }
+        
+          // ---------- WebSocket (live hour only) ----------
   function connectWS(){
     if(state.ws){ try{ state.ws.onclose=null; state.ws.close(); }catch(e){} }
     setStatus('connecting');
@@ -631,7 +663,15 @@
       if(!opened){ showBanner('Live connection to Binance is blocked or slow in this preview. Download this file and open it directly in your browser for live data.'); }
     },6000);
 
-    ws.onopen=()=>{ opened=true; clearTimeout(failTimer); state.reconnectAttempts=0; setStatus('live'); hideBanner(); };
+    ws.onopen=()=>{
+          opened=true; clearTimeout(failTimer); state.reconnectAttempts=0; setStatus('live'); hideBanner();
+          if(state.lastDisconnectAt){
+            const gapStart=state.lastDisconnectAt;
+            const gapEnd=Date.now();
+            state.lastDisconnectAt=null;
+            backfillGap(gapStart, gapEnd);
+          }
+        };
     ws.onmessage=(ev)=>{
           try{
             const msg=JSON.parse(ev.data);
@@ -651,11 +691,12 @@
         };
     ws.onerror=()=>{ setStatus('error'); };
     ws.onclose=()=>{
-      setStatus('offline');
-      state.reconnectAttempts++;
-      const delay=Math.min(15000, 1000*state.reconnectAttempts);
-      setTimeout(()=>{ if(state.ws===ws) connectWS(); }, delay);
-    };
+          setStatus('offline');
+          if(opened && !state.lastDisconnectAt){ state.lastDisconnectAt=Date.now(); }
+          state.reconnectAttempts++;
+          const delay=Math.min(15000, 1000*state.reconnectAttempts);
+          setTimeout(()=>{ if(state.ws===ws) connectWS(); }, delay);
+        };
   }
 
   function handleCandle(t,o,c){
@@ -790,14 +831,15 @@
         cache.clear();
         loadingHours.clear();
         state.liveHourStart=hourStart(Date.now());
-        state.isLive=true;
-        state.tickSecStart=null;
-        state.tickOpen=null;
-        state.tickClose=null;
-        resetPredStats();
-        connectWS();
-        setView(state.liveHourStart);
-      }
+                state.isLive=true;
+                state.tickSecStart=null;
+                state.tickOpen=null;
+                state.tickClose=null;
+                state.lastDisconnectAt=null;
+                resetPredStats();
+                connectWS();
+                setView(state.liveHourStart);
+              }
 
   // ---------- tooltip & detail ----------
   const tooltip=document.getElementById('tooltip');
