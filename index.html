@@ -574,19 +574,18 @@
     }
   
     function updateStats(){
-        let up=0, down=0, draw=0;
-        for(let i=0;i<SEC_PER_HOUR;i++){
-          const cell=cells[i];
-          if(!cell) continue;
-          if(cell.classList.contains('future')) continue;
-          if(cell.classList.contains('up')) up++;
-          else if(cell.classList.contains('down')) down++;
-          else draw++;
-        }
-        document.getElementById('statUp').textContent=up;
-        document.getElementById('statDown').textContent=down;
-        document.getElementById('statDraw').textContent=draw;
-      }
+            let up=0, down=0, draw=0;
+            for(let i=0;i<SEC_PER_HOUR;i++){
+              const cell=cells[i];
+              if(!cell) continue;
+              if(cell.classList.contains('up')) up++;
+              else if(cell.classList.contains('down')) down++;
+              else if(cell.classList.contains('flat')) draw++;
+            }
+            document.getElementById('statUp').textContent=up;
+            document.getElementById('statDown').textContent=down;
+            document.getElementById('statDraw').textContent=draw;
+          }
 
   // ---------- REST historical fetch ----------
   async function loadHistorical(rangeStart, uptoSecExclusive){
@@ -612,12 +611,13 @@
         }
         hideBanner();
       }catch(err){
-        showBanner('Historical data blocked or unreachable in this preview (network/CORS restriction). Download this file and open it directly in your browser to fetch live Binance data.');
-      } finally {
-        loadingHours.delete(rangeStart);
-                if(state.viewHourStart===rangeStart) paintFromCache(rangeStart);
-              }
-            }
+              showBanner('Historical data blocked or unreachable in this preview (network/CORS restriction). Download this file and open it directly in your browser to fetch live Binance data.');
+            } finally {
+              loadingHours.delete(rangeStart);
+                      resolvePendingWindows(rangeStart);
+                      if(state.viewHourStart===rangeStart) paintFromCache(rangeStart);
+                    }
+                  }
         
           async function backfillGap(fromMs, toMs){
             if(toMs<=fromMs) return;
@@ -643,12 +643,13 @@
               }
               hideBanner();
             }catch(err){
-              showBanner('Gap backfill after reconnect failed (network/CORS restriction). Some seconds during the outage may show as no data.');
-            } finally {
-              loadingHours.delete(rangeKey);
-              paintFromCache(state.viewHourStart);
-            }
-          }
+                          showBanner('Gap backfill after reconnect failed (network/CORS restriction). Some seconds during the outage may show as no data.');
+                        } finally {
+                          loadingHours.delete(rangeKey);
+                          resolvePendingWindows(state.liveHourStart);
+                          paintFromCache(state.viewHourStart);
+                        }
+                      }
         
           // ---------- WebSocket (live hour only) ----------
   function connectWS(){
@@ -713,18 +714,20 @@
     }
   
     function rollLiveHour(newHs){
-                  finalizeHourPredStats(state.liveHourStart);
-                  state.liveHourStart=newHs;
-                  if(state.isLive){
-                state.viewHourStart=newHs;
-                updateHourLabel();
-                paintFromCache(newHs);
-                loadHistorical(newHs, Math.floor((Date.now()-newHs)/1000)+1);
-                state.viewBackfilled=false;
-                state.autoRoll=true;
-                updateNav();
-              }
-            }
+                      const endedHs=state.liveHourStart;
+                      finalizeHourPredStats(endedHs);
+                      loadHistorical(endedHs, SEC_PER_HOUR);
+                      state.liveHourStart=newHs;
+                      if(state.isLive){
+                    state.viewHourStart=newHs;
+                    updateHourLabel();
+                    paintFromCache(newHs);
+                    loadHistorical(newHs, Math.floor((Date.now()-newHs)/1000)+1);
+                    state.viewBackfilled=false;
+                    state.autoRoll=true;
+                    updateNav();
+                  }
+                }
 
   // ---------- status / banner ----------
   function setStatus(kind){
@@ -1052,26 +1055,26 @@
                       resetPredStats();
                     }
             function resetPredStats(){
-                                      PRED_INTERVALS.forEach(n=>{
-                                        predStats[n]={right:0, wrong:0, flat:0, lastEvalK:null};
-                                        updateAccuracyDisplay(n);
-                                      });
-                                    }
-                        function finalizeHourPredStats(oldHs){
-                                                  const arr=cache.get(oldHs);
                                                   PRED_INTERVALS.forEach(n=>{
-                                                    const stats=predStats[n];
-                                                    if(!stats) return;
-                                                    if(arr && stats.lastEvalK!==null){
-                                                      const winSize=n*60;
-                                                      const maxK=Math.ceil(SEC_PER_HOUR/winSize);
-                                                      for(let j=stats.lastEvalK; j<maxK; j++){
-                                                        evaluateWindow(n, j, oldHs);
-                                                      }
-                                                    }
-                                                    stats.lastEvalK=null;
+                                                    predStats[n]={right:0, wrong:0, flat:0, lastEvalK:null, pending:[]};
+                                                    updateAccuracyDisplay(n);
                                                   });
                                                 }
+                        function finalizeHourPredStats(oldHs){
+                                                                          PRED_INTERVALS.forEach(n=>{
+                                                                            const stats=predStats[n];
+                                                                            if(!stats) return;
+                                                                            if(stats.lastEvalK!==null){
+                                                                              const winSize=n*60;
+                                                                              const maxK=Math.ceil(SEC_PER_HOUR/winSize);
+                                                                              for(let j=stats.lastEvalK; j<maxK; j++){
+                                                                                stats.pending.push({hs:oldHs, k:j});
+                                                                              }
+                                                                            }
+                                                                            stats.lastEvalK=null;
+                                                                          });
+                                                                          resolvePendingWindows(oldHs);
+                                                                        }
             function updateAccuracyDisplay(n){
                           const card=predCards[n];
                           const stats=predStats[n];
@@ -1106,39 +1109,55 @@
                                       else if(delta<0) signal='down';
                                       return {green, red, flatCount, delta, signal};
                                     }
-                                    function evaluateWindow(n, k, hsOverride){
-                                                              const hs=hsOverride || state.liveHourStart;
-                                                              const winSize=n*60;
-                                                              const arr=cache.get(hs);
-                                                              if(!arr) return;
-                                                              const bounds=windowBounds(k, winSize);
-                                                              const targetBox=arr[bounds.windowEnd-1];
-                                                              if(!targetBox) return;
-                                                              const actualSignal=boxSignal(targetBox);
-                                                              const predRange=computeMajorityRange(arr, bounds.windowStart, bounds.windowEnd-1);
-                                                              const predictedSignal=predRange.signal;
-                                                              const stats=predStats[n];
-                                                              if(!stats || predictedSignal==='flat') return;
-                                                              if(actualSignal==='flat'){ stats.flat++; updateAccuracyDisplay(n); return; }
-                                                              if(predictedSignal===actualSignal) stats.right++;
-                                                              else stats.wrong++;
-                                                              updateAccuracyDisplay(n);
-                                                            }
+                                    function evaluateWindow(n, k, hs){
+                                                                                                  const winSize=n*60;
+                                                                                                  const arr=cache.get(hs);
+                                                                                                  if(!arr) return false;
+                                                                                                  const bounds=windowBounds(k, winSize);
+                                                                                                  const targetBox=arr[bounds.windowEnd-1];
+                                                                                                  if(!targetBox) return false;
+                                                                                                  const actualSignal=boxSignal(targetBox);
+                                                                                                  const predRange=computeMajorityRange(arr, bounds.windowStart, bounds.windowEnd-1);
+                                                                                                  const predictedSignal=predRange.signal;
+                                                                                                  const stats=predStats[n];
+                                                                                                  if(!stats) return true;
+                                                                                                  if(predictedSignal==='flat'){ return true; }
+                                                                                                  if(actualSignal==='flat'){ stats.flat++; updateAccuracyDisplay(n); return true; }
+                                                                                                  if(predictedSignal===actualSignal) stats.right++;
+                                                                                                  else stats.wrong++;
+                                                                                                  updateAccuracyDisplay(n);
+                                                                                                  return true;
+                                                                                                }
+                                                                        function resolvePendingWindows(hs){
+                                                                                                  const arr=cache.get(hs);
+                                                                                                  if(!arr) return;
+                                                                                                  PRED_INTERVALS.forEach(n=>{
+                                                                                                    const stats=predStats[n];
+                                                                                                    if(!stats || !stats.pending.length) return;
+                                                                                                    stats.pending = stats.pending.filter(item=>{
+                                                                                                      if(item.hs!==hs) return true;
+                                                                                                      return !evaluateWindow(n, item.k, item.hs);
+                                                                                                    });
+                                                                                                  });
+                                                                                                }
                         function updatePredictionAccuracy(){
-                          const hs=state.liveHourStart;
-                          const nowMs=Date.now();
-                          let secOfHour=Math.floor((nowMs-hs)/1000)+1;
-                          secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
-                          PRED_INTERVALS.forEach(n=>{
-                            const winSize=n*60;
-                            const k=Math.ceil(secOfHour/winSize);
-                            const stats=predStats[n];
-                            if(!stats) return;
-                            if(stats.lastEvalK===null){ stats.lastEvalK=k; return; }
-                            for(let j=stats.lastEvalK; j<k; j++){ evaluateWindow(n, j); }
-                            stats.lastEvalK=k;
-                          });
-                        }
+                                                  const hs=state.liveHourStart;
+                                                  const nowMs=Date.now();
+                                                  let secOfHour=Math.floor((nowMs-hs)/1000)+1;
+                                                  secOfHour=Math.max(1, Math.min(SEC_PER_HOUR, secOfHour));
+                                                  PRED_INTERVALS.forEach(n=>{
+                                                    const winSize=n*60;
+                                                    const k=Math.ceil(secOfHour/winSize);
+                                                    const stats=predStats[n];
+                                                    if(!stats) return;
+                                                    if(stats.lastEvalK===null){ stats.lastEvalK=k; return; }
+                                                    for(let j=stats.lastEvalK; j<k; j++){
+                                                      if(!evaluateWindow(n, j, hs)) stats.pending.push({hs, k:j});
+                                                    }
+                                                    stats.lastEvalK=k;
+                                                  });
+                                                  resolvePendingWindows(hs);
+                                                }
                     function computeIntervalPrediction(n){
                                       const hs=state.liveHourStart;
                                       const arr=cache.get(hs);
